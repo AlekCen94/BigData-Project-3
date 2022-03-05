@@ -1,0 +1,74 @@
+version: '2'
+services:
+  kafka-server:
+    image: wurstmeister/kafka:2.11-1.1.1
+    container_name: kafka-server
+    ports:
+      - "9092:9092"
+    environment:
+      - ALLOW_PLAINTEXT_LISTENER=yes
+      - KAFKA_ZOOKEEPER_CONNECT=zookeeper-server:2181
+      - KAFKA_LISTENERS=PLAINTEXT://kafka-server:9092
+      
+    depends_on:
+      - zookeeper-server
+      
+  zookeeper-server:
+    image: wurstmeister/zookeeper:latest
+    ports:
+      - "2181:2181"
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+  App:
+    build: ./App
+    image: appmod:latest
+    container_name: App
+    ports:
+      - "8888:8888"
+      - "4040-4080:4040-4080"
+    links:
+      - kafka-server #allows spark notebook to discover kafka service by name "kafka-server"
+      
+    volumes:
+      - ./App/notebooks:/home/jovyan/work/notebooks/
+
+  Producer:
+    build: ./TestModelProducer
+    image: modprod:latest
+    container_name: Producer
+    environment:
+        - SPARK_MASTER_NAME=spark-master
+        - SPARK_MASTER_PORT=7077
+        - SPARK_APPLICATION_ARGS=foo
+        - SPARK_APPLICATION_PYTHON_LOCATION=/app/app.py
+        - MALWER_DATA=hdfs://namenode:9000/data/Ransomware/*.csv
+        - ENABLE_INIT_DAEMON=false
+
+
+  namenode:
+    build: ./hdfs
+    image: hdfsnamenode
+    container_name: namenode
+    environment:
+        - CORE_CONF_fs_defaultFS=hdfs://namenode:9000
+        - CLUSTER_NAME=hadooptest
+    ports:
+        - "9870:9870"
+        - "9000:9000"
+    volumes:
+    - D:/MLProject:/opt/hadoopspark
+    
+  datanode:
+        build: ./hdfs/datanode
+        image: hdfsdatanode
+        container_name: datanode
+        environment:
+            - CORE_CONF_fs_defaultFS=hdfs://namenode:9000
+        volumes:
+            - D:/MLProject:/opt/hadoopspark
+networks:
+        default:
+            external:
+                name: MLSpark
+
+
